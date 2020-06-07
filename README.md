@@ -1,6 +1,6 @@
 # coffer
 
-A new Flutter project.
+Coffer Photos mobile application.
 
 ## Getting Started
 

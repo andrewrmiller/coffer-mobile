@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'models/folder.dart';
+import 'models/file.dart';
+import 'services/coffer.dart';
 
 void main() {
   runApp(MyApp());
@@ -53,29 +55,44 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final picker = ImagePicker();
-  int _counter = 0;
   String state = "Nothing yet!";
+  Future<Folder> currentFolder;
+  Future<List<Folder>> subFolders;
+  Future<List<File>> files;
+  
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  Widget createFolderWidget(Folder folder) {
+    return new Container(
+      color: Colors.yellow,
+      child: Column(
+        children: [
+          GestureDetector(
+            child: Text(folder.name),
+            onTap: () {
+              setState(() {
+                this.currentFolder = Future<Folder>.sync(() => folder);
+                this.currentFolder.then((folder) {
+                  setState(() {
+                    this.subFolders = CofferApi.getFolders(folder.folderId);
+                    this.files = CofferApi.getFiles(folder.folderId);
+                  });
+                });
+              });
+          })]
+      )
+    );
   }
 
-  Future<String> uploadImage(filename, url) async {
-    var request = http.MultipartRequest('POST', Uri.parse(url));
-    print(url);
-    request.headers['Authorization'] = 'ApiKey 123456'; 
-    request.files.add(await http.MultipartFile.fromPath('files', filename));
-    var res = await request.send();
-    var res2 = await http.Response.fromStream(res);
-    return  res2.reasonPhrase;
-    // return res.reasonPhrase;
+  @override
+  void initState() {
+    super.initState();
+    this.currentFolder = CofferApi.getRootFolder().then((folder) {
+      setState(() {
+        subFolders = CofferApi.getFolders(folder.folderId);
+        files = CofferApi.getFiles(folder.folderId);
+      });
+      return folder;
+    });
   }
 
   @override
@@ -90,43 +107,61 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title:           
+          FutureBuilder<Folder>(
+            future: currentFolder, 
+            builder:(context, snapshot) {
+              if (snapshot.hasData) {
+                return Text(snapshot.data.name);
+              } else if (snapshot.hasError) {
+                return Text("${snapshot.error}");
+              }
+              return CircularProgressIndicator();
+            }
+          ),
       ),
       body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
+        child:
+          Column(children: <Widget>[
+            FutureBuilder<List<Folder>>(
+              future: subFolders, 
+              builder:(context, snapshot) {
+                if (snapshot.hasData) {
+                  var folders = snapshot.data;
+                  return Wrap(
+                    spacing: 8.0,
+                    children: folders.map((f) => createFolderWidget(f)).toList()
+                  );
+                } else if (snapshot.hasError) {
+                  return Text("${snapshot.error}");
+                }
+                return CircularProgressIndicator();
+              }
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
+
+            FutureBuilder<List<File>>(
+              future: files, 
+              builder:(context, snapshot) {
+                if (snapshot.hasData) {
+                  var folders = snapshot.data;
+                  return Wrap(
+                    spacing: 8.0,
+                    children: folders.map((f) => new Text(f.name)).toList()
+                  );
+                } else if (snapshot.hasError) {
+                  return Text("${snapshot.error}");
+                }
+                return CircularProgressIndicator();
+              }
             ),
-            Text(state)
-          ],
-        ),
+
+          ],)
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
+          var targetFolder = await currentFolder;
           var file = await picker.getImage(source: ImageSource.gallery);
-          var res = await uploadImage(file.path, 'https://stage.picsilver.net/api/libraries/1dbe6700-8230-11ea-8979-918be6c276d6/folders/ec677910-a365-11ea-ab9e-c1cb3e997b71/files');
+          var res = await CofferApi.uploadImage(file.path, targetFolder.folderId);
           setState(() {
             state = res;
             print(res);
