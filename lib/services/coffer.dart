@@ -1,6 +1,7 @@
 import 'package:coffer/models/file.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:typed_data';
 import '../models/folder.dart';
 
 const String BaseUrl = 'https://stage.picsilver.net/api/libraries/1dbe6700-8230-11ea-8979-918be6c276d6';
@@ -59,6 +60,34 @@ class CofferApi {
       var res2 = await http.Response.fromStream(res);
       List fileArray = jsonDecode(res2.body);
       return fileArray.map((f) => File.fromJson(f)).toList();
+    }
+    catch (e) {
+      print(e.toString());
+      throw e;
+    }
+  }
+
+  static Future<Uint8List> getFileThumbnail(String fileId) async {
+    try{
+      var request = _createRequest('GET', "$BaseUrl/files/$fileId/thumbnails/sm");
+      request.headers['Authorization'] = 'ApiKey 123456'; 
+      var res = await request.send();
+      var res2 = await http.Response.fromStream(res);
+      return res2.bodyBytes;
+    }
+    catch (e) {
+      print(e.toString());
+      throw e;
+    }
+  }
+
+  static Future<Uint8List> getFileContents(String fileId) async {
+    try{
+      var request = _createRequest('GET', "$BaseUrl/files/$fileId/contents");
+      request.headers['Authorization'] = 'ApiKey 123456'; 
+      var res = await request.send();
+      var res2 = await http.Response.fromStream(res);
+      return res2.bodyBytes;
     }
     catch (e) {
       print(e.toString());

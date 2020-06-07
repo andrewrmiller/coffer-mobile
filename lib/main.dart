@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'models/folder.dart';
 import 'models/file.dart';
 import 'services/coffer.dart';
+import 'widgets/picture.dart';
 
 void main() {
   runApp(MyApp());
@@ -146,7 +147,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   var folders = snapshot.data;
                   return Wrap(
                     spacing: 8.0,
-                    children: folders.map((f) => new Text(f.name)).toList()
+                    children: folders.map((f) => new Picture(file: f)).toList()
                   );
                 } else if (snapshot.hasError) {
                   return Text("${snapshot.error}");
