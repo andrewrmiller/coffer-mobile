@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:stack/stack.dart' as StackClass;
 import 'models/folder.dart';
 import 'models/file.dart';
 import 'services/coffer.dart';
@@ -57,6 +58,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   final picker = ImagePicker();
   String state = "Nothing yet!";
+  StackClass.Stack<Folder> navStack = StackClass.Stack();
   Future<Folder> currentFolder;
   Future<List<Folder>> subFolders;
   Future<List<File>> files;
@@ -129,7 +131,8 @@ class _MyHomePageState extends State<MyHomePage> {
         )
       ),
       onTap: () {
-        setState(() {
+        setState(() async {
+          this.navStack.push(await currentFolder);
           this.currentFolder = Future<Folder>.sync(() => folder);
           this.currentFolder.then((folder) {
             setState(() {
@@ -164,8 +167,24 @@ class _MyHomePageState extends State<MyHomePage> {
     // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
+        leading: GestureDetector(
+          child:  Column(
+            children: <Widget>[
+              if (this.navStack.isNotEmpty)
+                Text("< Back")
+            ]
+          ),
+          onTap: () {
+            this.setState(() {
+              Folder lastFolder = this.navStack.pop();
+              this.currentFolder = Future<Folder>.sync(() => lastFolder);
+              this.currentFolder.then((folder) {
+                this.subFolders = CofferApi.getFolders(folder.folderId);
+                this.files = CofferApi.getFiles(folder.folderId);              
+              });
+            });
+          }
+        ),
         title:           
           FutureBuilder<Folder>(
             future: currentFolder, 
