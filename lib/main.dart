@@ -61,26 +61,84 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<List<Folder>> subFolders;
   Future<List<File>> files;
   
+  Widget _createScrollableWidget() {
+    return FutureBuilder(
+      future: Future.wait([subFolders, files]),
+      builder: (context, snapshot){
+        List<Widget> slivers = new List<Widget>();
+        if(snapshot.hasData) {
+          List<Folder> folders = snapshot.data[0];
+          List<File> files = snapshot.data[1];
 
-  Widget createFolderWidget(Folder folder) {
-    return new Container(
-      color: Colors.yellow,
-      child: Column(
-        children: [
-          GestureDetector(
-            child: Text(folder.name),
-            onTap: () {
-              setState(() {
-                this.currentFolder = Future<Folder>.sync(() => folder);
-                this.currentFolder.then((folder) {
-                  setState(() {
-                    this.subFolders = CofferApi.getFolders(folder.folderId);
-                    this.files = CofferApi.getFiles(folder.folderId);
-                  });
-                });
-              });
-          })]
-      )
+          slivers.add( 
+            SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 3
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (BuildContext context, int index) {
+                  return _createFolderWidget(folders[index]);
+                },
+                childCount: folders.length
+              )
+            )
+          );
+          
+          slivers.add(
+            SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                
+                childAspectRatio: 1),
+              delegate: SliverChildBuilderDelegate(
+                (BuildContext context, int index) {
+                  return new Picture(file: files[index]);
+                },
+                childCount: files.length
+              )
+            )
+          );
+        } else if (snapshot.hasError) {
+          print(snapshot.error);
+          return Text("${snapshot.error}");
+        } else {
+          slivers.add(SliverToBoxAdapter(child: Container(),));
+        }
+
+        return CustomScrollView(
+          slivers: slivers,
+        );
+      },
+    );
+  }
+
+
+  Widget _createFolderWidget(Folder folder) {
+    return new GestureDetector(
+      child: Container(
+        color: Colors.yellow,
+        child: Column(
+          children: [
+            Text(folder.name)
+          ]
+        )
+      ),
+      onTap: () {
+        setState(() {
+          this.currentFolder = Future<Folder>.sync(() => folder);
+          this.currentFolder.then((folder) {
+            setState(() {
+              this.subFolders = CofferApi.getFolders(folder.folderId);
+              this.files = CofferApi.getFiles(folder.folderId);
+            });
+          });
+        });
+      }
     );
   }
 
@@ -117,46 +175,22 @@ class _MyHomePageState extends State<MyHomePage> {
               } else if (snapshot.hasError) {
                 return Text("${snapshot.error}");
               }
-              return CircularProgressIndicator();
+              return Container();
             }
           ),
       ),
       body: Center(
-        child:
-          Column(children: <Widget>[
-            FutureBuilder<List<Folder>>(
-              future: subFolders, 
-              builder:(context, snapshot) {
-                if (snapshot.hasData) {
-                  var folders = snapshot.data;
-                  return Wrap(
-                    spacing: 8.0,
-                    children: folders.map((f) => createFolderWidget(f)).toList()
-                  );
-                } else if (snapshot.hasError) {
-                  return Text("${snapshot.error}");
-                }
-                return CircularProgressIndicator();
+        child: FutureBuilder<Folder>(
+            future: currentFolder, 
+            builder:(context, snapshot) {
+              if (snapshot.hasData) {
+                return _createScrollableWidget();
+              } else if (snapshot.hasError) {
+                return Text("${snapshot.error}");
               }
-            ),
-
-            FutureBuilder<List<File>>(
-              future: files, 
-              builder:(context, snapshot) {
-                if (snapshot.hasData) {
-                  var folders = snapshot.data;
-                  return Wrap(
-                    spacing: 8.0,
-                    children: folders.map((f) => new Picture(file: f)).toList()
-                  );
-                } else if (snapshot.hasError) {
-                  return Text("${snapshot.error}");
-                }
-                return CircularProgressIndicator();
-              }
-            ),
-
-          ],)
+              return Container();
+            }
+          ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
