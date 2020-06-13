@@ -1,6 +1,7 @@
 
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../detail.dart';
 import '../models/file.dart';
 import '../services/coffer.dart';
 
@@ -20,7 +21,7 @@ class _PictureState extends State<Picture> {
   @override
   void initState() {
     super.initState();
-    this.contents = CofferApi.getFileThumbnail(this.widget.file.fileId);
+    this.contents = CofferApi.getFileThumbnail(this.widget.file.fileId, ThumbnailSizeMedium);
   }
 
   @override
@@ -30,7 +31,14 @@ class _PictureState extends State<Picture> {
         future: contents, 
         builder:(context, snapshot) {
           if (snapshot.hasData) {
-            return Image.memory(snapshot.data);
+            return GestureDetector(
+              child: Image.memory(snapshot.data), 
+              onTap: () {
+                Navigator.push(
+                  context, 
+                  MaterialPageRoute(builder: (context) => PictureDetail(fileId: this.widget.file.fileId)));
+              }
+            );
           } else if (snapshot.hasError) {
             return Text("${snapshot.error}");
           }

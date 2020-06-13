@@ -6,6 +6,10 @@ import '../models/folder.dart';
 
 const String BaseUrl = 'https://stage.picsilver.net/api/libraries/1dbe6700-8230-11ea-8979-918be6c276d6';
 
+const ThumbnailSizeSmall = "sm";
+const ThumbnailSizeMedium = "md";
+const ThumbnailSizeLarge = "lg";
+
 class CofferApi {
   static Future<Folder> getRootFolder() async {
     try{
@@ -67,9 +71,9 @@ class CofferApi {
     }
   }
 
-  static Future<Uint8List> getFileThumbnail(String fileId) async {
+  static Future<Uint8List> getFileThumbnail(String fileId, String thumbnailSize) async {
     try{
-      var request = _createRequest('GET', "$BaseUrl/files/$fileId/thumbnails/md");
+      var request = _createRequest('GET', "$BaseUrl/files/$fileId/thumbnails/$thumbnailSize");
       request.headers['Authorization'] = 'ApiKey 123456'; 
       var res = await request.send();
       var res2 = await http.Response.fromStream(res);
