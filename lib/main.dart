@@ -93,8 +93,8 @@ class _MyHomePageState extends State<MyHomePage> {
             SliverGrid(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
+                crossAxisSpacing: 4,
+                mainAxisSpacing: 4,
                 
                 childAspectRatio: 1),
               delegate: SliverChildBuilderDelegate(

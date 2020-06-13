@@ -69,7 +69,7 @@ class CofferApi {
 
   static Future<Uint8List> getFileThumbnail(String fileId) async {
     try{
-      var request = _createRequest('GET', "$BaseUrl/files/$fileId/thumbnails/sm");
+      var request = _createRequest('GET', "$BaseUrl/files/$fileId/thumbnails/md");
       request.headers['Authorization'] = 'ApiKey 123456'; 
       var res = await request.send();
       var res2 = await http.Response.fromStream(res);

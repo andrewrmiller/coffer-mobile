@@ -25,17 +25,17 @@ class _PictureState extends State<Picture> {
 
   @override
   Widget build(BuildContext context) {
-
-    return FutureBuilder<Uint8List>(
-              future: contents, 
-              builder:(context, snapshot) {
-                if (snapshot.hasData) {
-                  return Image.memory(snapshot.data);
-                } else if (snapshot.hasError) {
-                  return Text("${snapshot.error}");
-                }
-                return CircularProgressIndicator();
-              }
-            );
+    return 
+      FutureBuilder<Uint8List>(
+        future: contents, 
+        builder:(context, snapshot) {
+          if (snapshot.hasData) {
+            return Image.memory(snapshot.data);
+          } else if (snapshot.hasError) {
+            return Text("${snapshot.error}");
+          }
+          return CircularProgressIndicator();
+        }
+      );
   }
 }
