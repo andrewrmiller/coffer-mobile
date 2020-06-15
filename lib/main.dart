@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
         // or simply save your changes to "hot reload" in a Flutter IDE).
         // Notice that the counter didn't reset back to zero; the application
         // is not restarted.
-        primarySwatch: Colors.green,
+        primarySwatch: Colors.blueGrey,
         // This makes the visual density adapt to the platform that you run
         // the app on. For desktop platforms, the controls will be smaller and
         // closer together (more dense) than on mobile platforms.
@@ -62,54 +62,44 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<Folder> currentFolder;
   Future<List<Folder>> subFolders;
   Future<List<File>> files;
-  
+
   Widget _createScrollableWidget() {
     return FutureBuilder(
       future: Future.wait([subFolders, files]),
-      builder: (context, snapshot){
+      builder: (context, snapshot) {
         List<Widget> slivers = new List<Widget>();
-        if(snapshot.hasData) {
+        if (snapshot.hasData) {
           List<Folder> folders = snapshot.data[0];
           List<File> files = snapshot.data[1];
 
-          slivers.add( 
-            SliverGrid(
+          slivers.add(SliverGrid(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 3
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (BuildContext context, int index) {
-                  return _createFolderWidget(folders[index]);
-                },
-                childCount: folders.length
-              )
-            )
-          );
-          
-          slivers.add(
-            SliverGrid(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 3),
+              delegate:
+                  SliverChildBuilderDelegate((BuildContext context, int index) {
+                return _createFolderWidget(folders[index]);
+              }, childCount: folders.length)));
+
+          slivers.add(SliverGrid(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 4,
-                mainAxisSpacing: 4,
-                
-                childAspectRatio: 1),
-              delegate: SliverChildBuilderDelegate(
-                (BuildContext context, int index) {
-                  return new Picture(file: files[index]);
-                },
-                childCount: files.length
-              )
-            )
-          );
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 4,
+                  mainAxisSpacing: 4,
+                  childAspectRatio: 1),
+              delegate:
+                  SliverChildBuilderDelegate((BuildContext context, int index) {
+                return new Picture(file: files[index]);
+              }, childCount: files.length)));
         } else if (snapshot.hasError) {
           print(snapshot.error);
           return Text("${snapshot.error}");
         } else {
-          slivers.add(SliverToBoxAdapter(child: Container(),));
+          slivers.add(SliverToBoxAdapter(
+            child: Container(),
+          ));
         }
 
         return CustomScrollView(
@@ -119,30 +109,23 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-
   Widget _createFolderWidget(Folder folder) {
     return new GestureDetector(
-      child: Container(
-        color: Colors.yellow,
-        child: Column(
-          children: [
-            Text(folder.name)
-          ]
-        )
-      ),
-      onTap: () {
-        setState(() async {
-          this.navStack.push(await currentFolder);
-          this.currentFolder = Future<Folder>.sync(() => folder);
-          this.currentFolder.then((folder) {
-            setState(() {
-              this.subFolders = CofferApi.getFolders(folder.folderId);
-              this.files = CofferApi.getFiles(folder.folderId);
-            });
+        child: Container(
+            color: Colors.yellow, child: Column(children: [Text(folder.name)])),
+        onTap: () async {
+          Folder oldFolder = await currentFolder;
+          Future<List<Folder>> subFolders =
+              CofferApi.getFolders(folder.folderId);
+          Future<List<File>> files = CofferApi.getFiles(folder.folderId);
+
+          setState(() {
+            this.navStack.push(oldFolder);
+            this.currentFolder = Future<Folder>.sync(() => folder);
+            this.subFolders = subFolders;
+            this.files = files;
           });
         });
-      }
-    );
   }
 
   @override
@@ -166,56 +149,53 @@ class _MyHomePageState extends State<MyHomePage> {
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
         leading: GestureDetector(
-          child:  Column(
-            children: <Widget>[
-              if (this.navStack.isNotEmpty)
-                Text("< Back")
-            ]
-          ),
-          onTap: () {
-            this.setState(() {
-              Folder lastFolder = this.navStack.pop();
-              this.currentFolder = Future<Folder>.sync(() => lastFolder);
-              this.currentFolder.then((folder) {
-                this.subFolders = CofferApi.getFolders(folder.folderId);
-                this.files = CofferApi.getFiles(folder.folderId);              
+            child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  if (this.navStack.isNotEmpty) Icon(Icons.arrow_back)
+                ]),
+            onTap: () {
+              this.setState(() {
+                Folder lastFolder = this.navStack.pop();
+                this.currentFolder = Future<Folder>.sync(() => lastFolder);
+                this.currentFolder.then((folder) {
+                  this.subFolders = CofferApi.getFolders(folder.folderId);
+                  this.files = CofferApi.getFiles(folder.folderId);
+                });
               });
-            });
-          }
-        ),
-        title:           
-          FutureBuilder<Folder>(
-            future: currentFolder, 
-            builder:(context, snapshot) {
+            }),
+        title: FutureBuilder<Folder>(
+            future: currentFolder,
+            builder: (context, snapshot) {
               if (snapshot.hasData) {
                 return Text(snapshot.data.name);
               } else if (snapshot.hasError) {
                 return Text("${snapshot.error}");
               }
               return Container();
-            }
-          ),
+            }),
       ),
       body: Center(
         child: FutureBuilder<Folder>(
-            future: currentFolder, 
-            builder:(context, snapshot) {
+            future: currentFolder,
+            builder: (context, snapshot) {
               if (snapshot.hasData) {
                 return _createScrollableWidget();
               } else if (snapshot.hasError) {
                 return Text("${snapshot.error}");
               }
               return Container();
-            }
-          ),
+            }),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           var targetFolder = await currentFolder;
           var file = await picker.getImage(source: ImageSource.gallery);
-          var res = await CofferApi.uploadImage(file.path, targetFolder.folderId);
+          var res =
+              await CofferApi.uploadImage(file.path, targetFolder.folderId);
           setState(() {
             state = res;
             print(res);

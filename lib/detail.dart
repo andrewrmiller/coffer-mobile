@@ -7,48 +7,46 @@ class PictureDetail extends StatefulWidget {
 
   final String fileId;
 
-  @override 
+  @override
   _PictureDetailState createState() => _PictureDetailState();
 }
 
 class _PictureDetailState extends State<PictureDetail> {
-
   Future<Uint8List> contents;
 
   @override
   void initState() {
     super.initState();
-    this.contents = CofferApi.getFileThumbnail(this.widget.fileId, ThumbnailSizeLarge);
+    this.contents =
+        CofferApi.getFileThumbnail(this.widget.fileId, ThumbnailSizeLarge);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: Text("Photo Detail"),
       ),
       body: Center(
-        child: 
-          FutureBuilder<Uint8List>(
-            future: contents, 
-            builder:(context, snapshot) {
+        child: FutureBuilder<Uint8List>(
+            future: contents,
+            builder: (context, snapshot) {
               if (snapshot.hasData) {
                 return GestureDetector(
-                  child: Image.memory(snapshot.data),
-                  onPanUpdate: (details) {
-                    if (details.delta.dx > 0) {
-                      // swiping right
-                    } else if (details.delta.dx < 0) {
-                      // swiping left
-                    }
-                  }
-                );
+                    child: Image.memory(snapshot.data),
+                    onPanUpdate: (details) {
+                      if (details.delta.dx > 0) {
+                        // swiping right
+                      } else if (details.delta.dx < 0) {
+                        // swiping left
+                      }
+                    });
               } else if (snapshot.hasError) {
                 return Text("${snapshot.error}");
               }
               return CircularProgressIndicator();
-            }
-          ),
+            }),
       ),
     );
   }
