@@ -5,6 +5,7 @@ import 'models/folder.dart';
 import 'models/file.dart';
 import 'services/coffer.dart';
 import 'widgets/picture.dart';
+import 'widgets/picture_carousel.dart';
 
 void main() {
   runApp(MyApp());
@@ -63,6 +64,16 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<List<Folder>> subFolders;
   Future<List<File>> files;
 
+  void _handlePictureTap(File file) async {
+    var folder = await this.currentFolder;
+    var fileList = await this.files;
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                PictureCarousel(title: folder.name,files: fileList, selected: file )));
+  }
+
   Widget _createScrollableWidget() {
     return FutureBuilder(
       future: Future.wait([subFolders, files]),
@@ -91,7 +102,8 @@ class _MyHomePageState extends State<MyHomePage> {
                   childAspectRatio: 1),
               delegate:
                   SliverChildBuilderDelegate((BuildContext context, int index) {
-                return new Picture(file: files[index]);
+                return new Picture(
+                    file: files[index], onTap: _handlePictureTap);
               }, childCount: files.length)));
         } else if (snapshot.hasError) {
           print(snapshot.error);
