@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/services.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import '../services/coffer.dart';
@@ -6,7 +7,8 @@ import '../models/file.dart';
 
 /// Widget that renders a scrollable carousel of pictures.
 class PictureCarousel extends StatefulWidget {
-  PictureCarousel({Key key, this.title, this.files, this.selected}) : super(key: key);
+  PictureCarousel({Key key, this.title, this.files, this.selected})
+      : super(key: key);
 
   final String title;
 
@@ -21,10 +23,26 @@ class PictureCarousel extends StatefulWidget {
 class _PictureCarouselState extends State<PictureCarousel> {
   Map<String, Future<Uint8List>> fileContents;
 
+  bool autoPlay;
+
   @override
   void initState() {
     super.initState();
+    setState(() {
+      autoPlay = false;
+    });
     this.fileContents = new Map<String, Future<Uint8List>>();
+  }
+
+  void _toggleSlideShow() async {
+    setState(() {
+      autoPlay = !this.autoPlay;
+    });
+    if (this.autoPlay) {
+      SystemChrome.setEnabledSystemUIOverlays([]);
+    } else {
+      SystemChrome.setEnabledSystemUIOverlays(SystemUiOverlay.values);
+    }
   }
 
   Widget _getImageWidget(String fileId) {
@@ -51,19 +69,36 @@ class _PictureCarouselState extends State<PictureCarousel> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text(this.widget.title),
-      ),
-      body: Center(
-          child: CarouselSlider.builder(
-        itemCount: this.widget.files.length,
-        options: CarouselOptions(
-            height: 900.0,
-            enableInfiniteScroll: false,
-            initialPage: this.widget.files.indexOf(this.widget.selected)),
-        itemBuilder: (context, index) =>
-            this._getImageWidget(this.widget.files[index].fileId),
-      )),
+      appBar: this.autoPlay
+          ? null
+          : AppBar(
+              title: Text(this.widget.title),
+              actions: <Widget>[
+                Padding(
+                    padding: EdgeInsets.only(right: 20.0),
+                    child: GestureDetector(
+                      onTap: _toggleSlideShow,
+                      child: Icon(
+                        this.autoPlay ? Icons.stop : Icons.slideshow,
+                        size: 26.0,
+                      ),
+                    )),
+              ],
+            ),
+      body: GestureDetector(
+          onTap: _toggleSlideShow,
+          child: Center(
+              child: CarouselSlider.builder(
+            itemCount: this.widget.files.length,
+            options: CarouselOptions(
+                height: 900.0,
+                enableInfiniteScroll: false,
+                autoPlay: this.autoPlay,
+                enlargeCenterPage: true,
+                initialPage: this.widget.files.indexOf(this.widget.selected)),
+            itemBuilder: (context, index) =>
+                this._getImageWidget(this.widget.files[index].fileId),
+          ))),
     );
   }
 }
