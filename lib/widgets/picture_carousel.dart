@@ -1,7 +1,8 @@
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-import 'package:flutter/material.dart';
+import 'package:wakelock/wakelock.dart';
 import '../services/coffer.dart';
 import '../models/file.dart';
 
@@ -40,8 +41,10 @@ class _PictureCarouselState extends State<PictureCarousel> {
     });
     if (this.autoPlay) {
       SystemChrome.setEnabledSystemUIOverlays([]);
+      Wakelock.enable();
     } else {
       SystemChrome.setEnabledSystemUIOverlays(SystemUiOverlay.values);
+      Wakelock.disable();
     }
   }
 
