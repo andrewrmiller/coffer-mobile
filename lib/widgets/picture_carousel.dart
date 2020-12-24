@@ -8,8 +8,7 @@ import '../models/file.dart';
 
 /// Widget that renders a scrollable carousel of pictures.
 class PictureCarousel extends StatefulWidget {
-  PictureCarousel({Key key, this.title, this.files, this.selected})
-      : super(key: key);
+  PictureCarousel({Key key, this.title, this.files, this.selected}) : super(key: key);
 
   final String title;
 
@@ -50,8 +49,7 @@ class _PictureCarouselState extends State<PictureCarousel> {
 
   Widget _getImageWidget(String fileId) {
     if (!this.fileContents.containsKey(fileId)) {
-      this.fileContents[fileId] =
-          CofferApi.getFileThumbnail(fileId, ThumbnailSizeLarge);
+      this.fileContents[fileId] = CofferApi.getFileThumbnail(fileId, ThumbnailSizeLarge);
     }
 
     Future<Uint8List> contents = this.fileContents[fileId];
@@ -97,10 +95,12 @@ class _PictureCarouselState extends State<PictureCarousel> {
                 height: 900.0,
                 enableInfiniteScroll: false,
                 autoPlay: this.autoPlay,
+                autoPlayInterval: Duration(seconds: 15),
+                autoPlayAnimationDuration: Duration(milliseconds: 800),
+                autoPlayCurve: Curves.fastOutSlowIn,
                 enlargeCenterPage: true,
                 initialPage: this.widget.files.indexOf(this.widget.selected)),
-            itemBuilder: (context, index) =>
-                this._getImageWidget(this.widget.files[index].fileId),
+            itemBuilder: (context, index) => this._getImageWidget(this.widget.files[index].fileId),
           ))),
     );
   }
