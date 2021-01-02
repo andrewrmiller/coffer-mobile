@@ -274,7 +274,7 @@ class _MyHomePageState extends State<MyHomePage> {
               onTap: _handleAllPhotosTap,
             ),
             ListTile(
-              leading: Icon(Icons.star),
+              leading: Icon(Icons.photo_album),
               title: Text('Albums'),
               onTap: _handleAlbumsTap,
             ),
