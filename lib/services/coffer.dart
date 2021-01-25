@@ -2,6 +2,7 @@ import 'package:coffer/models/file.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:io' as io;
 import '../models/album.dart';
 import '../models/folder.dart';
 
@@ -40,12 +41,28 @@ class CofferApi {
     }
   }
 
-  static Future<String> uploadImage(filename, folderId) async {
+  static Future<String> uploadImage(String filename, String folderId) async {
     try {
       var request = http.MultipartRequest('POST', Uri.parse("$BaseUrl/folders/$folderId/files"));
+      request.headers['Authorization'] = 'ApiKey 123456';
       request.files.add(await http.MultipartFile.fromPath('files', filename));
       var stream = await request.send();
       var response = await http.Response.fromStream(stream);
+      return response.reasonPhrase;
+    } catch (e) {
+      print(e.toString());
+      throw e;
+    }
+  }
+
+  static Future<String> uploadFile(io.File file, String filename, String folderId) async {
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse("$BaseUrl/folders/$folderId/files"));
+      request.headers['Authorization'] = 'ApiKey 123456';
+      final bytes = await file.readAsBytes();
+      request.files.add(http.MultipartFile.fromBytes('files', bytes, filename: filename));
+      final stream = await request.send();
+      final response = await http.Response.fromStream(stream);
       return response.reasonPhrase;
     } catch (e) {
       print(e.toString());

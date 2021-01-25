@@ -7,6 +7,7 @@ import 'models/file.dart';
 import 'services/coffer.dart';
 import 'widgets/picture.dart';
 import 'widgets/picture_carousel.dart';
+import 'synchronizer.dart';
 
 enum View { Folder, Album }
 
@@ -88,6 +89,10 @@ class _MyHomePageState extends State<MyHomePage> {
       this.subFolders = Future<List<Folder>>.value([]);
     });
     Navigator.of(context).pop();
+  }
+
+  void _handleSyncTap() async {
+    Synchronizer.synchronize();
   }
 
   void _handleBackTap() async {
@@ -277,6 +282,11 @@ class _MyHomePageState extends State<MyHomePage> {
               leading: Icon(Icons.photo_album),
               title: Text('Albums'),
               onTap: _handleAlbumsTap,
+            ),
+            ListTile(
+              leading: Icon(Icons.sync),
+              title: Text('Synchronize'),
+              onTap: _handleSyncTap,
             ),
           ],
         ),
