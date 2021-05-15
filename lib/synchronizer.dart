@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:isolate';
+import 'package:device_info/device_info.dart';
 import 'package:path/path.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:sqflite/sqflite.dart';
@@ -31,7 +32,8 @@ class Synchronizer {
 
     // Make sure the target folder exists.
     developer.log("Checking target folder.");
-    final deviceFolder = await _ensureDeviceFolder("Synchronized Files");
+    final deviceName = await _getDeviceName();
+    final deviceFolder = await _ensureDeviceFolder(deviceName);
     final deviceFolderId = deviceFolder.item1;
 
     // If we created a new target folder delete any previous synchronization
@@ -130,6 +132,37 @@ class Synchronizer {
       // path to perform database upgrades and downgrades.
       version: 1,
     );
+  }
+
+  static Future<String> _getDeviceName() async {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    if (Platform.isAndroid) {
+      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+      // https://developer.amazon.com/docs/fire-tablets/ft-identifying-tablet-devices.html
+      if (androidInfo.manufacturer == "Amazon") {
+        switch (androidInfo.model) {
+          case 'T76N2B (3GB)':
+          case 'T76N2P (4GB)':
+          case 'KFMAWI':
+          case 'KFSUWI':
+          case 'KFTBWI':
+            return "Amazon Fire HD 10 (${androidInfo.id})";
+
+          case 'KFONWI':
+          case 'KFKAWI':
+          case 'KFDOWI':
+          case 'KFGIWI':
+          case 'KFMEWI':
+            return "Amazon Fire HD 8 (${androidInfo.id})";
+          default:
+          // Fall through.
+        }
+      }
+      return "${androidInfo.manufacturer} ${androidInfo.model} (${androidInfo.id})";
+    } else {
+      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+      return iosInfo.utsname.machine;
+    }
   }
 
   static Future<Tuple2<String, bool>> _ensureDeviceFolder(String deviceName) async {
