@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:stack/stack.dart' as StackClass;
+import 'dart:developer' as developer;
 import 'models/album.dart';
 import 'models/folder.dart';
 import 'models/file.dart';
@@ -8,6 +9,8 @@ import 'services/coffer.dart';
 import 'widgets/picture.dart';
 import 'widgets/picture_carousel.dart';
 import 'synchronizer.dart';
+import 'dart:isolate';
+import 'package:flutter_isolate/flutter_isolate.dart';
 
 enum View { Folder, Album }
 
@@ -61,6 +64,9 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  FlutterIsolate synchronizer;
+  int synchronizationCount;
+  ReceivePort receivePort;
   final picker = ImagePicker();
   View view = View.Folder;
   StackClass.Stack<Folder> navStack = StackClass.Stack();
@@ -91,8 +97,41 @@ class _MyHomePageState extends State<MyHomePage> {
     Navigator.of(context).pop();
   }
 
-  void _handleSyncTap() async {
-    Synchronizer.synchronize();
+  void _handleSyncTap() {
+    developer.log("Starting synchronization.");
+
+    setState(() {
+      // Set up the receive port so we can receive messages.
+      if (this.receivePort == null) {
+        this.receivePort = ReceivePort();
+        this.receivePort.listen((dynamic message) {
+          if (message == "fileSynced") {
+            setState(() {
+              synchronizationCount++;
+            });
+          }
+          if (message == "syncComplete") {
+            setState(() {
+              this.synchronizer.kill();
+              this.synchronizer = null;
+              this.synchronizationCount = null;
+            });
+          }
+        });
+      }
+
+      // Stop any existing synchronizer.
+      if (this.synchronizer != null) {
+        this.synchronizer.kill();
+        this.synchronizer = null;
+      }
+
+      // Spin up the synchronizer isolate.
+      this.synchronizationCount = 0;
+      FlutterIsolate.spawn(Synchronizer.synchronize, this.receivePort.sendPort).then((isolate) {
+        this.synchronizer = isolate;
+      });
+    });
   }
 
   void _handleBackTap() async {
@@ -115,8 +154,11 @@ class _MyHomePageState extends State<MyHomePage> {
   void _handlePictureTap(File file) async {
     var folder = await this.currentFolder;
     var fileList = await this.files;
-    Navigator.push(context,
-        MaterialPageRoute(builder: (context) => PictureCarousel(title: folder.name, files: fileList, selected: file)));
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                PictureCarousel(title: folder.name, files: fileList, selected: file)));
   }
 
   Widget _createScrollableWidget() {
@@ -131,14 +173,20 @@ class _MyHomePageState extends State<MyHomePage> {
 
           slivers.add(SliverGrid(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 3),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 3),
               delegate: SliverChildBuilderDelegate((BuildContext context, int index) {
                 return _createFolderWidget(folders[index]);
               }, childCount: folders.length)));
 
           slivers.add(SliverGrid(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 3),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 3),
               delegate: SliverChildBuilderDelegate((BuildContext context, int index) {
                 return _createAlbumWidget(albums[index]);
               }, childCount: albums.length)));
@@ -199,6 +247,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    synchronizationCount = null;
     this.currentFolder = CofferApi.getRootFolder().then((folder) {
       setState(() {
         subFolders = CofferApi.getFolders(folder.folderId);
@@ -285,7 +334,9 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             ListTile(
               leading: Icon(Icons.sync),
-              title: Text('Synchronize'),
+              title: Text(synchronizationCount != null
+                  ? "Synchronizing... ($synchronizationCount)"
+                  : 'Synchronize'),
               onTap: _handleSyncTap,
             ),
           ],

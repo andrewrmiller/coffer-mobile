@@ -5,8 +5,10 @@ import 'dart:typed_data';
 import 'dart:io' as io;
 import '../models/album.dart';
 import '../models/folder.dart';
+import '../models/folderAdd.dart';
 
-const String BaseUrl = 'https://stage.picsilver.net/api/libraries/1dbe6700-8230-11ea-8979-918be6c276d6';
+const String BaseUrl =
+    'https://stage.picsilver.net/api/libraries/1dbe6700-8230-11ea-8979-918be6c276d6';
 
 const ThumbnailSizeSmall = "sm";
 const ThumbnailSizeMedium = "md";
@@ -41,6 +43,23 @@ class CofferApi {
     }
   }
 
+  static Future<Folder> createFolder(String parentId, String name) async {
+    try {
+      http.Request request = _createRequest('POST', "$BaseUrl/folders");
+      request.headers['Authorization'] = 'ApiKey 123456';
+      request.headers['Content-Type'] = 'application/json';
+      final folderAdd = FolderAdd(parentId, name);
+      request.body = jsonEncode(folderAdd);
+      var stream = await request.send();
+      var response = await http.Response.fromStream(stream);
+      Folder folder = Folder.fromJson(jsonDecode(response.body));
+      return folder;
+    } catch (e) {
+      print(e.toString());
+      throw e;
+    }
+  }
+
   static Future<String> uploadImage(String filename, String folderId) async {
     try {
       var request = http.MultipartRequest('POST', Uri.parse("$BaseUrl/folders/$folderId/files"));
@@ -55,7 +74,7 @@ class CofferApi {
     }
   }
 
-  static Future<String> uploadFile(io.File file, String filename, String folderId) async {
+  static Future<File> uploadFile(io.File file, String filename, String folderId) async {
     try {
       final request = http.MultipartRequest('POST', Uri.parse("$BaseUrl/folders/$folderId/files"));
       request.headers['Authorization'] = 'ApiKey 123456';
@@ -63,7 +82,9 @@ class CofferApi {
       request.files.add(http.MultipartFile.fromBytes('files', bytes, filename: filename));
       final stream = await request.send();
       final response = await http.Response.fromStream(stream);
-      return response.reasonPhrase;
+      List fileArray = jsonDecode(response.body);
+      File result = File.fromJson(fileArray[0]);
+      return result;
     } catch (e) {
       print(e.toString());
       throw e;
