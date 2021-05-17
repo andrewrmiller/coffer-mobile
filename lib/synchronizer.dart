@@ -56,7 +56,10 @@ class Synchronizer {
     // Get the "recent" album which contains all photos and videos on the device.
     developer.log("Getting list of albums.");
     PhotoManager.setIgnorePermissionCheck(true);
-    List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(onlyAll: true);
+
+    FilterOptionGroup filterOption = FilterOptionGroup(imageOption: FilterOption(needTitle: true));
+    filterOption.addOrderOption(OrderOption(type: OrderOptionType.createDate, asc: true));
+    List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(onlyAll: true, filterOption: filterOption);
 
     // Page through the assets in the "recent" album.
     bool uploadedFiles = false;
@@ -65,7 +68,7 @@ class Synchronizer {
     while (assetList.length > 0) {
       // See if the assets in this page need to be uploaded.
       for (final asset in assetList) {
-        final file = await asset.file;
+        developer.log("Processing asset");
 
         // If the file is already in the databsae then it has already been uploaded.
         // Mark the file as seen and move on.
@@ -79,16 +82,45 @@ class Synchronizer {
           continue;
         }
 
-        await Synchronizer._uploadFile(file, asset.title, deviceFolderId);
-        final dbFile = {
-          'id': asset.id,
-          'seen': 1,
-        };
-        db.insert("files", dbFile);
-        uploadedFiles = true;
+        // We only upload images currently.
+        if (asset.type != AssetType.image) {
+          continue;
+        }
 
-        // TODO: When we have the isolate set up, callback into the UI
-        // isolate to see if we should continue synchronizing.
+        // https://github.com/CaiJingLong/flutter_photo_manager/issues/71
+        developer.log("Getting file contents.");
+        final file = await asset.file;
+
+        try {
+          // On iOS we have to use titleAsync to get the file title.
+          developer.log("Getting title.");
+          String title = asset.title;
+          if (title == null || title.isEmpty) {
+            title = await asset.titleAsync;
+          }
+
+          // If the file is an HEIC file we need to convert the filename.
+          // The file we get back from asset.file is JPG not HEIC.
+          if (title.endsWith(".HEIC")) {
+            title = title.replaceAll(".HEIC", ".JPG");
+          }
+
+          await Synchronizer._uploadFile(file, title, deviceFolderId);
+          final dbFile = {
+            'id': asset.id,
+            'seen': 1,
+          };
+          developer.log("Updating database");
+          db.insert("files", dbFile);
+          uploadedFiles = true;
+        } finally {
+          if (Platform.isIOS) {
+            developer.log("Deleting file.");
+            file.deleteSync();
+          }
+        }
+
+        developer.log("Sending status");
         sendPort.send('fileSynced');
       }
 
@@ -161,7 +193,7 @@ class Synchronizer {
       return "${androidInfo.manufacturer} ${androidInfo.model} (${androidInfo.id})";
     } else {
       IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-      return iosInfo.utsname.machine;
+      return iosInfo.name;
     }
   }
 
