@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:isolate';
 import 'package:device_info/device_info.dart';
+import 'package:exif/exif.dart';
+import 'package:heic_to_jpg/heic_to_jpg.dart';
 import 'package:path/path.dart';
-import 'package:photo_manager/photo_manager.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:photo_gallery/photo_gallery.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:tuple/tuple.dart';
 import 'services/coffer.dart';
@@ -25,6 +29,23 @@ import 'models/file.dart' as ApiFile;
 const PageSize = 20;
 
 // https://flutter.dev/docs/cookbook/persistence/sqlite
+
+const Map<String, String> ExifStringValues = {
+  'Image Make': 'Make',
+  'Image Model': 'Model',
+  'Image UserComment': 'Comment',
+  'Image Description': 'ImageDescription',
+  'EXIF DateTimeOriginal': 'DateTimeOriginal'
+};
+
+const Map<String, String> ExifNumberValues = {
+  'Image Orientation': 'Orientation',
+  'Image Rating': 'Rating',
+  'EXIF ImageWidth': 'ImageWidth',
+  'EXIF ImageHeight': 'ImageHeight',
+};
+
+const MimeTypeJpeg = 'image/jpeg';
 
 class Synchronizer {
   static void synchronize(SendPort sendPort) async {
@@ -55,66 +76,96 @@ class Synchronizer {
 
     // Get the "recent" album which contains all photos and videos on the device.
     developer.log("Getting list of albums.");
-    PhotoManager.setIgnorePermissionCheck(true);
+    Album allAlbum;
+    final List<Album> albums = await PhotoGallery.listAlbums(
+      mediumType: MediumType.image,
+    );
+    for (var i = 0; i < albums.length; i++) {
+      if (albums[i].isAllAlbum) {
+        allAlbum = albums[i];
+        break;
+      }
+    }
 
-    FilterOptionGroup filterOption = FilterOptionGroup(imageOption: FilterOption(needTitle: true));
-    filterOption.addOrderOption(OrderOption(type: OrderOptionType.createDate, asc: true));
-    List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(onlyAll: true, filterOption: filterOption);
+    // PhotoManager.setIgnorePermissionCheck(true);
 
-    // Page through the assets in the "recent" album.
+    // FilterOptionGroup filterOption = FilterOptionGroup(imageOption: FilterOption(needTitle: true));
+    // filterOption.addOrderOption(OrderOption(type: OrderOptionType.createDate, asc: true));
+    // List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(onlyAll: true, filterOption: filterOption);
+
+    // Page through the assets in the album.
     bool uploadedFiles = false;
     developer.log("Fetching asset list page $currentPage.");
-    List<AssetEntity> assetList = await albums.first.getAssetListPaged(currentPage, PageSize);
-    while (assetList.length > 0) {
+    MediaPage mediaPage = await allAlbum.listMedia(skip: 0, take: PageSize);
+    while (!mediaPage.isLast) {
       // See if the assets in this page need to be uploaded.
-      for (final asset in assetList) {
+      for (final Medium medium in mediaPage.items) {
         developer.log("Processing asset");
 
-        // If the file is already in the databsae then it has already been uploaded.
+        // If the file is already in the database then it has already been uploaded.
         // Mark the file as seen and move on.
-        final result = await db.query("files", where: "id = ?", whereArgs: [asset.id]);
+        final result = await db.query("files", where: "id = ?", whereArgs: [medium.id]);
         if (result.length > 0) {
-          developer.log("File ${asset.title} has already been uploaded.");
+          developer.log("File ${medium.id} has already been uploaded.");
           Map<String, dynamic> dbFile = Map.from(result[0]);
           dbFile['seen'] = 1;
-          db.update("files", dbFile, where: "id = ?", whereArgs: [asset.id]);
+          db.update("files", dbFile, where: "id = ?", whereArgs: [medium.id]);
           sendPort.send('fileSynced');
-          continue;
-        }
-
-        // We only upload images currently.
-        if (asset.type != AssetType.image) {
           continue;
         }
 
         // https://github.com/CaiJingLong/flutter_photo_manager/issues/71
         developer.log("Getting file contents.");
-        final file = await asset.file;
+        File file = await medium.getFile();
+        String convertedPath;
 
         try {
-          // On iOS we have to use titleAsync to get the file title.
-          developer.log("Getting title.");
-          String title = asset.title;
-          if (title == null || title.isEmpty) {
-            title = await asset.titleAsync;
+          String title = basename(file.path);
+          String contentType = medium.mimeType;
+          DateTime createdOn = medium.creationDate;
+          String metadata;
+
+          if (title.startsWith('234D85ED-2B09-4269-8D7C-CB1467C91640')) {
+            final createDate = medium.creationDate;
+            final modifyDate = medium.modifiedDate;
+            final otherDate = file.lastModifiedSync();
           }
 
-          // If the file is an HEIC file we need to convert the filename.
-          // The file we get back from asset.file is JPG not HEIC.
-          if (title.endsWith(".HEIC")) {
-            title = title.replaceAll(".HEIC", ".JPG");
+          // Simplify iOS filenames.
+          if (Platform.isIOS) {
+            final basename = basenameWithoutExtension(title);
+            final ext = extension(title);
+            List<String> basenameParts = basename.split('_');
+            if (basenameParts.length >= 3 && basenameParts[0].length > 0) {
+              title = basenameParts[0] + ext;
+            }
           }
 
-          await Synchronizer._uploadFile(file, title, deviceFolderId);
+          // If the file is an HEIC file we need to convert the file to JPEG
+          // and upload that since the Coffer services does not recognize HEIC
+          // files.  And since the conversion library we use tosses out all
+          // metadata, the metadata is extracted from the HEIC file separately
+          // and included in the upload a s a custom header.
+          if (medium.mimeType == 'image/heic') {
+            title = basenameWithoutExtension(title) + '.JPG';
+            metadata = await Synchronizer._extractMetadataAsJson(file, createdOn, MimeTypeJpeg);
+            convertedPath = (await getTemporaryDirectory()).path + "/" + title;
+            String jpegPath = await HeicToJpg.convert(file.path, jpgPath: convertedPath);
+            file = new File(jpegPath);
+            contentType = MimeTypeJpeg;
+          }
+
+          await Synchronizer._uploadFile(file, title, contentType, deviceFolderId, metadata);
           final dbFile = {
-            'id': asset.id,
+            'id': medium.id,
             'seen': 1,
           };
           developer.log("Updating database");
           db.insert("files", dbFile);
           uploadedFiles = true;
         } finally {
-          if (Platform.isIOS) {
+          // TODO: Figure out if I need to do anything in the non-conversion case.
+          if (Platform.isIOS && convertedPath != null) {
             developer.log("Deleting file.");
             file.deleteSync();
           }
@@ -132,7 +183,7 @@ class Synchronizer {
       currentPage++;
       await db.execute("UPDATE sync_status SET current_page = " + currentPage.toString());
       developer.log("Fetching asset list page $currentPage.");
-      assetList = await albums.first.getAssetListPaged(currentPage, PageSize);
+      mediaPage = await mediaPage.nextPage();
     }
 
     // TODO: Update the database to indicate that we have fully processed the asset list.
@@ -215,9 +266,67 @@ class Synchronizer {
     return Tuple2(subFolder, created);
   }
 
-  static Future<ApiFile.File> _uploadFile(File file, String filename, String folderId) {
+  static Future<String> _extractMetadataAsJson(File file, DateTime createdOn, String mimetype) async {
+    final fileBytes = File(file.path).readAsBytesSync();
+    final exif = await readExifFromBytes(fileBytes);
+
+    Map simplified = new Map();
+    simplified['DateTimeOriginal'] = createdOn.toString();
+    simplified['MIMEType'] = mimetype;
+
+    ExifStringValues.forEach((k, v) {
+      if (exif.containsKey(k)) {
+        simplified[v] = exif[k].printable;
+      }
+    });
+
+    ExifNumberValues.forEach((k, v) {
+      if (exif.containsKey(k)) {
+        simplified[v] = exif[k].values[0];
+      }
+    });
+
+    if (exif.containsKey('GPS GPSLatitude') && exif.containsKey('GPS GPSLatitudeRef')) {
+      simplified['GPSLatitude'] =
+          Synchronizer._convertExifGpsToDouble(exif['GPS GPSLatitude'].values, exif['GPS GPSLatitudeRef'].printable);
+    }
+
+    if (exif.containsKey('GPS GPSLongitude') && exif.containsKey('GPS GPSLongitudeRef')) {
+      simplified['GPSLongitude'] =
+          Synchronizer._convertExifGpsToDouble(exif['GPS GPSLongitude'].values, exif['GPS GPSLongitudeRef'].printable);
+    }
+
+    if (exif.containsKey('GPS GPSAltitude') && exif.containsKey('GPS GPSAltitudeRef')) {
+      Ratio ratio = exif['GPS GPSAltitude'].values[0];
+      double altitude = ratio.numerator / ratio.denominator.toDouble();
+      if (exif['GPS GPSAltitudeRef'].values[0] == 1) {
+        altitude = altitude * -1;
+      }
+      simplified['GPSAltitutde'] = altitude;
+    }
+
+    final metadata = json.encode(simplified);
+    return metadata;
+  }
+
+  // https://stackoverflow.com/questions/4983766
+  static double _convertExifGpsToDouble(List<dynamic> values, String ref) {
+    Ratio degreesRatio = values[0];
+    double degrees = degreesRatio.numerator / degreesRatio.denominator.toDouble();
+    Ratio minutesRatio = values[1];
+    double minutes = minutesRatio.numerator / minutesRatio.denominator.toDouble();
+    Ratio secondsRatio = values[2];
+    double seconds = secondsRatio.numerator / secondsRatio.denominator.toDouble();
+    double coordinate = degrees + (minutes / 60.0) + (seconds / 3600.0);
+    if (ref == "S" || ref == "W") {
+      coordinate = coordinate * -1;
+    }
+    return coordinate;
+  }
+
+  static Future<ApiFile.File> _uploadFile(File file, String filename, String contentType, String folderId,
+      [String metadata]) {
     developer.log("Uploading file $filename...");
-    // TODO: Pass mimetype up here.
-    return CofferApi.uploadFile(file, filename, folderId);
+    return CofferApi.uploadFile(file, filename, contentType, folderId, metadata);
   }
 }

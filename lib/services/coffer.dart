@@ -1,5 +1,6 @@
 import 'package:coffer/models/file.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' as io;
@@ -7,8 +8,7 @@ import '../models/album.dart';
 import '../models/folder.dart';
 import '../models/folderAdd.dart';
 
-const String BaseUrl =
-    'https://stage.picsilver.net/api/libraries/1dbe6700-8230-11ea-8979-918be6c276d6';
+const String BaseUrl = 'https://stage.picsilver.net/api/libraries/1dbe6700-8230-11ea-8979-918be6c276d6';
 
 const ThumbnailSizeSmall = "sm";
 const ThumbnailSizeMedium = "md";
@@ -74,14 +74,24 @@ class CofferApi {
     }
   }
 
-  static Future<File> uploadFile(io.File file, String filename, String folderId) async {
+  static Future<File> uploadFile(io.File file, String filename, String contentType, String folderId,
+      [String metadata]) async {
     try {
       final request = http.MultipartRequest('POST', Uri.parse("$BaseUrl/folders/$folderId/files"));
       request.headers['Authorization'] = 'ApiKey 123456';
+      if (metadata != null) {
+        request.fields['metadata'] = metadata;
+      }
       final bytes = await file.readAsBytes();
-      request.files.add(http.MultipartFile.fromBytes('files', bytes, filename: filename));
+      request.files.add(
+          http.MultipartFile.fromBytes('files', bytes, filename: filename, contentType: MediaType.parse(contentType)));
       final stream = await request.send();
       final response = await http.Response.fromStream(stream);
+      if (response.statusCode >= 400) {
+        final error = response.body;
+        print(error);
+        throw (error);
+      }
       List fileArray = jsonDecode(response.body);
       File result = File.fromJson(fileArray[0]);
       return result;

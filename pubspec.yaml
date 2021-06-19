@@ -46,6 +46,10 @@ dependencies:
   tuple: ^2.0.0
   flutter_isolate: ^2.0.0
   device_info: ^2.0.0
+  photo_gallery: ^1.0.1
+  heic_to_jpg: ^0.2.0
+  path_provider: ^2.0.2
+  exif: ^2.2.0
 
 
 dev_dependencies:
