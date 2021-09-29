@@ -8,7 +8,8 @@ import '../models/album.dart';
 import '../models/folder.dart';
 import '../models/folderAdd.dart';
 
-const String BaseUrl = 'https://stage.picsilver.net/api/libraries/1dbe6700-8230-11ea-8979-918be6c276d6';
+const String BaseUrl =
+    'https://stage.picsilver.net/api/libraries/1dbe6700-8230-11ea-8979-918be6c276d6';
 
 const ThumbnailSizeSmall = "sm";
 const ThumbnailSizeMedium = "md";
@@ -83,8 +84,8 @@ class CofferApi {
         request.fields['metadata'] = metadata;
       }
       final bytes = await file.readAsBytes();
-      request.files.add(
-          http.MultipartFile.fromBytes('files', bytes, filename: filename, contentType: MediaType.parse(contentType)));
+      request.files.add(http.MultipartFile.fromBytes('files', bytes,
+          filename: filename, contentType: MediaType.parse(contentType)));
       final stream = await request.send();
       final response = await http.Response.fromStream(stream);
       if (response.statusCode >= 400) {
