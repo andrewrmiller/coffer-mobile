@@ -84,6 +84,7 @@ class Synchronizer {
       await db.update("sync_status", {"current_page": 0});
     }
 
+    Map<int, String> yearFolders = {};
     final syncStatusRows = await db.query("sync_status");
     int currentPage = syncStatusRows[0]['current_page'];
 
@@ -147,12 +148,6 @@ class Synchronizer {
           DateTime createdOn = medium.creationDate;
           String metadata;
 
-          if (title.startsWith('234D85ED-2B09-4269-8D7C-CB1467C91640')) {
-            final createDate = medium.creationDate;
-            final modifyDate = medium.modifiedDate;
-            final otherDate = file.lastModifiedSync();
-          }
-
           // Simplify iOS filenames.
           if (Platform.isIOS) {
             final basename = basenameWithoutExtension(title);
@@ -177,7 +172,16 @@ class Synchronizer {
             contentType = MimeTypeJpeg;
           }
 
-          await Synchronizer._uploadFile(file, title, contentType, deviceFolderId, metadata)
+          // Photos are uploaded into yearly subfolders.
+          int photoYear = createdOn.year;
+          if (!yearFolders.containsKey(photoYear)) {
+            developer.log("Year folder not found.  Creating...");
+            Tuple2<Folder, bool> uploadFolder =
+                await Synchronizer._ensureSubFolder(deviceFolderId, photoYear.toString());
+            yearFolders[photoYear] = uploadFolder.item1.folderId;
+          }
+
+          await Synchronizer._uploadFile(file, title, contentType, yearFolders[photoYear], metadata)
               .catchError((e) {
             developer.log(e.toString());
             developer.log("Error occurred trying to upload file.  Continuing...");
