@@ -11,9 +11,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_gallery/photo_gallery.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:tuple/tuple.dart';
-import 'services/coffer.dart';
+import 'package:wakelock/wakelock.dart';
+import 'constants/synchronizer_message.dart';
 import 'models/folder.dart';
 import 'models/file.dart' as ApiFile;
+import 'services/coffer.dart';
 
 // This code should eventually be packaged up in an isolate so that it can run
 // independent of the UI isolate.  For more information see these articles:
@@ -49,6 +51,23 @@ const MimeTypeJpeg = 'image/jpeg';
 
 class Synchronizer {
   static void synchronize(SendPort sendPort) async {
+    bool stopSynchronization = false;
+
+    // Listen for messages from the main thread.
+    ReceivePort receivePort = ReceivePort();
+    receivePort.listen((dynamic data) {
+      if (data is String && data == SynchronizerMessage.stopSynchronization.toString()) {
+        stopSynchronization = true;
+        developer.log("Received stopSynchronization command.");
+      }
+    });
+    sendPort.send(receivePort.sendPort);
+
+    // On iOS we can't do background synchronization if the app is paused
+    // (e.g. the screen is locked).  As long as this is the active app and
+    // there is synchronization work to do, prevent the screen from locking.
+    Wakelock.enable();
+
     final db = await Synchronizer._openDatabase();
 
     // Make sure the target folder exists.
@@ -94,12 +113,15 @@ class Synchronizer {
     // List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(onlyAll: true, filterOption: filterOption);
 
     // Page through the assets in the album.
-    bool uploadedFiles = false;
     developer.log("Fetching asset list page $currentPage.");
     MediaPage mediaPage = await allAlbum.listMedia(skip: 0, take: PageSize);
     while (!mediaPage.isLast) {
       // See if the assets in this page need to be uploaded.
       for (final Medium medium in mediaPage.items) {
+        if (stopSynchronization) {
+          break;
+        }
+
         developer.log("Processing asset");
 
         // If the file is already in the database then it has already been uploaded.
@@ -110,7 +132,7 @@ class Synchronizer {
           Map<String, dynamic> dbFile = Map.from(result[0]);
           dbFile['seen'] = 1;
           db.update("files", dbFile, where: "id = ?", whereArgs: [medium.id]);
-          sendPort.send('fileSynced');
+          sendPort.send(SynchronizerMessage.fileSynced.toString());
           continue;
         }
 
@@ -155,29 +177,34 @@ class Synchronizer {
             contentType = MimeTypeJpeg;
           }
 
-          await Synchronizer._uploadFile(file, title, contentType, deviceFolderId, metadata);
+          await Synchronizer._uploadFile(file, title, contentType, deviceFolderId, metadata)
+              .catchError((e) {
+            developer.log(e.toString());
+            developer.log("Error occurred trying to upload file.  Continuing...");
+            // TODO: What should we write to the database in this case?
+          });
+
           final dbFile = {
             'id': medium.id,
             'seen': 1,
           };
           developer.log("Updating database");
           db.insert("files", dbFile);
-          uploadedFiles = true;
         } finally {
           // TODO: Figure out if I need to do anything in the non-conversion case.
           if (Platform.isIOS && convertedPath != null) {
-            developer.log("Deleting file.");
+            developer.log("Deleting temporary file.");
             file.deleteSync();
           }
         }
 
-        developer.log("Sending status");
-        sendPort.send('fileSynced');
+        sendPort.send(SynchronizerMessage.fileSynced.toString());
       }
 
-      if (uploadedFiles) {
-        // TODO: We uploaded some files, call back into the parent to see if we should continue.
-        // return;
+      if (stopSynchronization) {
+        // TODO: Figure out what state to leave the database in when we exit like this.
+        // i.e. Should we stay on the current page?
+        break;
       }
 
       currentPage++;
@@ -198,7 +225,9 @@ class Synchronizer {
 
     await db.execute("UPDATE sync_status SET current_page = 0");
     developer.log("Terminating synchronization isolate.");
-    sendPort.send('syncComplete');
+    sendPort.send(SynchronizerMessage.syncComplete.toString());
+
+    Wakelock.disable();
   }
 
   static Future<Database> _openDatabase() async {
@@ -266,7 +295,8 @@ class Synchronizer {
     return Tuple2(subFolder, created);
   }
 
-  static Future<String> _extractMetadataAsJson(File file, DateTime createdOn, String mimetype) async {
+  static Future<String> _extractMetadataAsJson(
+      File file, DateTime createdOn, String mimetype) async {
     final fileBytes = File(file.path).readAsBytesSync();
     final exif = await readExifFromBytes(fileBytes);
 
@@ -282,24 +312,24 @@ class Synchronizer {
 
     ExifNumberValues.forEach((k, v) {
       if (exif.containsKey(k)) {
-        simplified[v] = exif[k].values[0];
+        simplified[v] = exif[k].values.toList()[0];
       }
     });
 
     if (exif.containsKey('GPS GPSLatitude') && exif.containsKey('GPS GPSLatitudeRef')) {
       simplified['GPSLatitude'] =
-          Synchronizer._convertExifGpsToDouble(exif['GPS GPSLatitude'].values, exif['GPS GPSLatitudeRef'].printable);
+          Synchronizer._convertExifGpsToDouble(exif['GPS GPSLatitude'], exif['GPS GPSLatitudeRef']);
     }
 
     if (exif.containsKey('GPS GPSLongitude') && exif.containsKey('GPS GPSLongitudeRef')) {
-      simplified['GPSLongitude'] =
-          Synchronizer._convertExifGpsToDouble(exif['GPS GPSLongitude'].values, exif['GPS GPSLongitudeRef'].printable);
+      simplified['GPSLongitude'] = Synchronizer._convertExifGpsToDouble(
+          exif['GPS GPSLongitude'], exif['GPS GPSLongitudeRef']);
     }
 
     if (exif.containsKey('GPS GPSAltitude') && exif.containsKey('GPS GPSAltitudeRef')) {
-      Ratio ratio = exif['GPS GPSAltitude'].values[0];
+      Ratio ratio = exif['GPS GPSAltitude'].values.toList()[0];
       double altitude = ratio.numerator / ratio.denominator.toDouble();
-      if (exif['GPS GPSAltitudeRef'].values[0] == 1) {
+      if (exif['GPS GPSAltitudeRef'].values.firstAsInt() == 1) {
         altitude = altitude * -1;
       }
       simplified['GPSAltitutde'] = altitude;
@@ -310,7 +340,8 @@ class Synchronizer {
   }
 
   // https://stackoverflow.com/questions/4983766
-  static double _convertExifGpsToDouble(List<dynamic> values, String ref) {
+  static double _convertExifGpsToDouble(IfdTag coordinateTag, IfdTag refTag) {
+    List<dynamic> values = coordinateTag.values.toList();
     Ratio degreesRatio = values[0];
     double degrees = degreesRatio.numerator / degreesRatio.denominator.toDouble();
     Ratio minutesRatio = values[1];
@@ -318,13 +349,16 @@ class Synchronizer {
     Ratio secondsRatio = values[2];
     double seconds = secondsRatio.numerator / secondsRatio.denominator.toDouble();
     double coordinate = degrees + (minutes / 60.0) + (seconds / 3600.0);
+
+    String ref = refTag.printable;
     if (ref == "S" || ref == "W") {
       coordinate = coordinate * -1;
     }
     return coordinate;
   }
 
-  static Future<ApiFile.File> _uploadFile(File file, String filename, String contentType, String folderId,
+  static Future<ApiFile.File> _uploadFile(
+      File file, String filename, String contentType, String folderId,
       [String metadata]) {
     developer.log("Uploading file $filename...");
     return CofferApi.uploadFile(file, filename, contentType, folderId, metadata);

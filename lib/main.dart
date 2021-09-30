@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:stack/stack.dart' as StackClass;
 import 'dart:developer' as developer;
+import 'constants/synchronizer_message.dart';
 import 'models/album.dart';
 import 'models/folder.dart';
 import 'models/file.dart';
@@ -63,10 +64,11 @@ class MyHomePage extends StatefulWidget {
   _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   FlutterIsolate synchronizer;
   int synchronizationCount;
-  ReceivePort receivePort;
+  ReceivePort synchronizerReceivePort;
+  SendPort synchronizerSendPort;
   final picker = ImagePicker();
   View view = View.Folder;
   StackClass.Stack<Folder> navStack = StackClass.Stack();
@@ -101,21 +103,27 @@ class _MyHomePageState extends State<MyHomePage> {
     developer.log("Starting synchronization.");
 
     setState(() {
-      // Set up the receive port so we can receive messages.
-      if (this.receivePort == null) {
-        this.receivePort = ReceivePort();
-        this.receivePort.listen((dynamic message) {
-          if (message == "fileSynced") {
-            setState(() {
-              synchronizationCount++;
-            });
-          }
-          if (message == "syncComplete") {
-            setState(() {
-              this.synchronizer.kill();
-              this.synchronizer = null;
-              this.synchronizationCount = null;
-            });
+      // Set up the receive port so we can receive messages from the synchronizer isolate;
+      if (this.synchronizerReceivePort == null) {
+        this.synchronizerReceivePort = ReceivePort();
+        this.synchronizerReceivePort.listen((dynamic data) {
+          if (data is SendPort) {
+            this.synchronizerSendPort = data;
+          } else {
+            if (data == SynchronizerMessage.fileSynced.toString()) {
+              setState(() {
+                synchronizationCount++;
+              });
+            }
+            if (data == SynchronizerMessage.syncComplete.toString()) {
+              setState(() {
+                this.synchronizer.kill();
+                this.synchronizer = null;
+                this.synchronizationCount = null;
+                this.synchronizerSendPort = null;
+                this.synchronizerReceivePort = null;
+              });
+            }
           }
         });
       }
@@ -128,7 +136,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
       // Spin up the synchronizer isolate.
       this.synchronizationCount = 0;
-      FlutterIsolate.spawn(Synchronizer.synchronize, this.receivePort.sendPort).then((isolate) {
+      FlutterIsolate.spawn(Synchronizer.synchronize, this.synchronizerReceivePort.sendPort)
+          .then((isolate) {
         this.synchronizer = isolate;
       });
     });
@@ -247,6 +256,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     synchronizationCount = null;
     this.currentFolder = CofferApi.getRootFolder().then((folder) {
       setState(() {
@@ -257,6 +267,23 @@ class _MyHomePageState extends State<MyHomePage> {
       });
       return folder;
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // If the synchronizer isolate has been set up, notify that isolate if the
+    // app transitions to the paused state.  Synchronization only happens when
+    // the application is in the foreground (AppLifecycleState.resumed).
+    if (this.synchronizerSendPort != null && state == AppLifecycleState.paused) {
+      this.synchronizerSendPort.send(SynchronizerMessage.stopSynchronization.toString());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
