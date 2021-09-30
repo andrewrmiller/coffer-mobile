@@ -174,7 +174,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     return FutureBuilder(
       future: Future.wait([subFolders, files, albums]),
       builder: (context, snapshot) {
-        List<Widget> slivers = new List<Widget>();
+        List<Widget> slivers = [];
         if (snapshot.hasData) {
           List<Folder> folders = snapshot.data[0];
           List<File> files = snapshot.data[1];
