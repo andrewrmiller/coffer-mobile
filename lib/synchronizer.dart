@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:isolate';
-import 'package:device_info/device_info.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:exif/exif.dart';
 import 'package:heic_to_jpg/heic_to_jpg.dart';
 import 'package:path/path.dart';

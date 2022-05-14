@@ -39,10 +39,10 @@ class _PictureCarouselState extends State<PictureCarousel> {
       autoPlay = !this.autoPlay;
     });
     if (this.autoPlay) {
-      SystemChrome.setEnabledSystemUIOverlays([]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
       Wakelock.enable();
     } else {
-      SystemChrome.setEnabledSystemUIOverlays(SystemUiOverlay.values);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
       Wakelock.disable();
     }
   }
@@ -100,7 +100,8 @@ class _PictureCarouselState extends State<PictureCarousel> {
                 autoPlayCurve: Curves.fastOutSlowIn,
                 enlargeCenterPage: true,
                 initialPage: this.widget.files.indexOf(this.widget.selected)),
-            itemBuilder: (context, index) => this._getImageWidget(this.widget.files[index].fileId),
+            itemBuilder: (context, index, realIndex) =>
+                this._getImageWidget(this.widget.files[index].fileId),
           ))),
     );
   }

@@ -28,6 +28,7 @@ Runner/GeneratedPluginRegistrant.*
 # Exclude XCode build data
 XCBuildData/
 **/dgph
+build/
 
 # Exceptions to above rules.
 !default.mode1v3

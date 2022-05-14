@@ -384,7 +384,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           var targetFolder = await currentFolder;
-          var file = await picker.getImage(source: ImageSource.gallery);
+          var file = await picker.pickImage(source: ImageSource.gallery);
           var res = await CofferApi.uploadImage(file.path, targetFolder.folderId);
           setState(() {
             print(res);
