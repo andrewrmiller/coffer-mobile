@@ -224,7 +224,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Widget _createFolderWidget(Folder folder) {
     return new GestureDetector(
-        child: Container(color: Colors.yellow, child: Column(children: [Text(folder.name)])),
+        child: Container(
+            child: Row(children: [
+          Icon(Icons.folder, color: Colors.yellow, size: 24.0),
+          SizedBox(width: 5),
+          Text(folder.name, style: TextStyle(color: Colors.white))
+        ])),
         onTap: () async {
           Folder oldFolder = await currentFolder;
           Future<List<Folder>> subFolders = CofferApi.getFolders(folder.folderId);
