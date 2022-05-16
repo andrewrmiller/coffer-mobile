@@ -246,7 +246,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Widget _createAlbumWidget(Album album) {
     return new GestureDetector(
-        child: Container(color: Colors.orangeAccent, child: Column(children: [Text(album.name)])),
+        child: Container(
+            child: Row(children: [
+          Icon(Icons.photo_album, color: Colors.orangeAccent, size: 24.0),
+          SizedBox(width: 5),
+          Text(album.name, style: TextStyle(color: Colors.white))
+        ])),
         onTap: () async {
           Future<List<File>> files = CofferApi.getAlbumFiles(album.albumId);
 
